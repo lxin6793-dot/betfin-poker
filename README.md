@@ -1,88 +1,80 @@
-# 0G RollPlay
+#  Betfin Poker Game
 
-## Decentralized AI-Powered Multi-Chain Gaming Platform
+## Next-Generation Crypto Poker Platform
 
-> **Blockchain Gaming on the 0G Network**  
-> 0G RollPlay is a gaming platform built on the **0G Network**, using decentralized AI. It supports multiple blockchains like **Ethereum (EVM)**, **Solana**, and more. Play-to-Earn (P2E) mechanics let you earn real crypto rewards.
-
----
-
-## Current Features
-
-- **Decentralized AI**
-- **Multi-Chain Support**: Play on **Ethereum (EVM)**, **Solana**, and other supported blockchains. Your assets and rewards can move between chains.
-- **Play-to-Earn (P2E)**: Earn real **crypto rewards** while playing. Rewards are powered by the 0G Network's AI to make payouts fair.
-- **NFT Avatars**: Create and use **NFT avatars**, supported on Ethereum, and other networks.
-- **On-Chain Game Logic**: All gameplay is controlled by smart contracts.
-- **Token Integration**: Stake and earn with native tokens across different blockchains.
-- **Mobile and Desktop Ready**: The platform works on both **desktop** and **mobile** devices.
+Betfin Poker is a blockchain-powered gaming platform that brings competitive poker into the Web3 ecosystem. 
+Players can join poker tables, compete for rewards, and engage with a decentralized staking economy. 
+Built on EVM-compatible chains, Betfin Poker combines skill-based gameplay, smart contract security, and community-driven incentives.
 
 ---
 
-## Coming Soon
+![](client/src/assets/game/First-background.jpg)
 
-- **More Games**: New games like **Blackjack**, **Roulette**, **Slots**, and others. All powered by decentralized AI.
-- **Tournaments**: Compete in cross-chain tournaments with prize pools. AI will manage the events and rewards.
-- **Social Features**: Chat, add friends, and interact with other players across different blockchains.
-- **Better P2E**: Improved reward systems that will work across all blockchains with the help of AI.
+---
 
+##  Features
+- **Decentralized Poker Rooms**: Host, join, and spectate Texas Hold'em games
+- **Play-to-Earn (P2E)**: Earn real crypto rewards
+- **NFT Avatars**: Use unique NFT avatars at the table
+- **On-Chain Game Logic**: Fair, transparent, and tamper-proof
+- **Token Staking**: Stake tokens for rewards and in-game benefits
+- **Modern UI/UX**: Responsive, mobile-friendly design
+- **Secure & Regulated**: Built by a globally trusted financial group
 
-[![React](https://img.shields.io/badge/React-16.13.1-61dafb?logo=react)](#)
-[![Node.js](https://img.shields.io/badge/Node.js-Express-43853d?logo=node.js)](#)
-[![TypeScript](https://img.shields.io/badge/TypeScript-4.9-blue?logo=typescript)](#)
-[![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248?logo=mongodb)](#)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.8.1-black?logo=socket.io)](#)
-[![Bootstrap](https://img.shields.io/badge/Bootstrap-5.1.3-purple?logo=bootstrap)](#)
-[![Styled Components](https://img.shields.io/badge/Styled_Components-5.1.1-DB7093?logo=styled-components)](#)
-[![Axios](https://img.shields.io/badge/Axios-1.4.0-5A29E4?logo=axios)](#)
+---
 
+## Project Structure
 
-## Quick Start
+### Frontend & Player Dashboard
 
+* React + Next.js – Responsive UI for game tables, player stats, and staking dashboards.
+* Real-Time Interactions – WebSocket integration for instant game updates.
+* Wallet-Connected Experience – Players interact directly with their crypto wallets for game actions and payouts.
+
+### Admin & Game Operations Panel
+
+* Admins can create and manage poker tables, set buy-in limits, and configure blind structures.
+* Real-time tracking of active games, player activity, and transaction histories.
+* Tools to detect collusion or cheating behaviors, ensuring a fair gaming environment.
+
+### Backend (Microservices)
+
+* Node.js + Express.js – Handles game matchmaking, session management, and player authentication.
+* Golang Modules – For high-performance poker engine logic and concurrency handling.
+* Blockchain Integration – Ethers.js and Web3.js for wallet connections and smart contract calls.
+* Real-time data delivery for game states, betting actions, and chat features.
+
+---
+
+## Getting Started
+
+### 1. Clone the repository
 ```bash
-git clone <git-repository-url>
-cd 0gRollplay
+git clone <project repo url>
+cd <project directory name>
+```
 
-# Install root dependencies
+### 2. Install and start backend dependencies
+```bash
 npm install
+npm start
+```
 
-# Go to the client folder and install its dependencies
+### 3. Install frontend dependencies
+Open new terminal
+```bash
 cd client
 npm install
+cd ..
+```
 
-# Start
+### 4. Run both with one command from the root:
+```bash
 npm start
 ```
 
 ---
 
-## Config
+## 🛡️ License
 
-- **JWT issuance** – `POST /api/auth` in `controllers/auth.js` signs a JWT with `config.JWT_SECRET_KEY` (see `SESSION_EXPIRES_IN`). The payload only contains `user.id` so you can safely extend it.
-- **Client storage** – Tokens are pushed into Axios’ default headers via `client/src/helpers/setAuthToken.js`. Persist them in `localStorage`/`sessionStorage` from your auth screen and call `setAuthToken(token)` on boot.
-- **Protected routes** – `middleware/auth.js` expects the token in the `x-auth-token` header and injects `req.user`. Use the middleware on any route that needs authenticated identity.
-
-## Contributing Guidelines
-
-### Pre-PR Checklist
-
-- [ ] Branch is updated with `main`  
-- [ ] No linting errors
-- [ ] No stray console logs or unused variables  
-- [ ] UI changes tested on desktop and mobile  
-- [ ] Added documentation or comments where needed  
-- [ ] Any new `.env` variables are documented  
-
-### Pull Request Rules
-- Use clear PR titles:
-  - `feat: add tournament lobby UI`
-- PR description must include:
-  - What changed  
-  - Why it changed  
-  - How to test  
-  - Screenshots for UI updates  
-- Tag related issues/tasks.
-
-## Confidentiality
-This repository is proprietary to **0G AI**.
-
+This project is licensed under the **ISC License**.
