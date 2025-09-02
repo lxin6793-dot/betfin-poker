@@ -1,9 +1,4 @@
-/node_modules
-/client/node_modules
-/server/node_modules
-/server/dist
-/server/build
-/server/public
-/server/src
-/server/test
-/server/test
+**/node_modules
+production.env
+loca/~$Loca_Keys_Strings_DE_EN.xlsx
+~$WIFI-Projekt Präsentation.pptx

